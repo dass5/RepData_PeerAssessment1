@@ -1,25 +1,128 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
+title: "Coursera Reproducible Research Project1"
+output:
   html_document:
-    keep_md: true
+    df_print: paged
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+## Loading the libraries and download and preprocess data:
 
+```{r }
+library(ggplot2)
+library(dplyr)
+temp=tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",temp, mode="wb")
+unzip(temp, "activity.csv")
+activity <- read.csv("activity.csv")
+```
+###Get data without NAs
+```{r }
+newactivity <- na.omit(activity) 
+```
+## Mean total number of steps taken per day omitting missing values
+```{r }
+totalsteps=newactivity %>%
+  group_by(date) %>%
+  summarize(sumsteps = sum(steps, na.rm = TRUE))
+```
+###Histogram of number of steps taken per day
+```{r }
+hist(totalsteps$sumsteps,xlab="Totalsteps",ylab="Frequency",main ="Toal number of steps taken each day" )
+```
 
+## Mean of the total number of steps taken per day
+```{r }
+meansteps= mean(totalsteps$sumsteps, na.rm = TRUE)
+meansteps
 
-## What is mean total number of steps taken per day?
+```
+## Median of the total number of steps taken per day
+```{r }
+mediansteps=median(totalsteps$sumsteps, na.rm = TRUE)
+mediansteps
+```
+##Time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r }
+avgsteps=activity %>%
+  group_by(interval) %>%
+  summarize(mean = mean(steps, na.rm = TRUE))
+plot(avgsteps$interval,avgsteps$mean,type="l",xlab="Interval",ylab="Average Steps",main ="5 minutes interval vs average steps taken")
+```
 
+##Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r }
+avgsteps[avgsteps$mean==max(avgsteps$mean),]
+```
+The 5-minute interval 835 contains the maximum number of steps(206 steps).
 
+## Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r }
+naactivity=activity[is.na(activity),]
+nrow(naactivity)
+```
+Total number of rows with missing values is 2304.
 
-## What is the average daily activity pattern?
+##Impute missing values using mean of that interval and create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r }
+##  Get the mean for each 5 mins interval
+meaninterval=activity %>%
+  group_by(interval) %>%
+  summarize(mean = mean(steps, na.rm = TRUE))
+## Merge the main dataset with the dataset containing mean of each 5 minutes interval
+total <- merge(activity,meaninterval,by="interval") 
+## Assign the 5 minutes interval mean value to the NA steps columns
+total$steps <- ifelse(is.na(total$steps) == TRUE, total$mean, total$steps) 
 
+```
+## Mean Total no of steps taken each day
+```{r }
+totalimpute=total %>%
+  group_by(date) %>%
+  summarize(sumsteps = sum(steps, na.rm = TRUE))
 
+hist(totalimpute$sumsteps,xlab="Totalsteps",ylab="Frequency",main ="Toal number of steps taken each day" )
+```
 
-## Imputing missing values
+## Mean of the total number of steps taken per day
+```{r }
+mean=mean(totalimpute$sumsteps)
+mean
+```
+## Median of the total number of steps taken per day
+```{r }
+  median=median(totalimpute$sumsteps)
+median
+```
 
+## Differences in activity patterns in weekdays and weekend
+```{r }
+total$day <- weekdays(as.Date(total$date))
 
+total$day1 <- ifelse((total$day == 'Saturday' | total$day == 'Sunday' ), 'weekend', 'weekday')  
 
-## Are there differences in activity patterns between weekdays and weekends?
+total_weekday=total[total$day1=='weekday',]
+total_weekend=total[total$day1=='weekend',]
+
+avgsteps_weekday=total_weekday %>%
+  group_by(interval) %>%
+  summarize(mean = mean(steps, na.rm = TRUE))
+
+avgsteps_weekend=total_weekend %>%
+  group_by(interval) %>%
+  summarize(mean = mean(steps, na.rm = TRUE))
+# Add a column day to indicate if its weekday or weekend
+avgsteps_weekday$day='weekday'
+avgsteps_weekend$day='weekend'
+total_week=rbind(avgsteps_weekday,avgsteps_weekend)
+
+p<- ggplot(total_week, aes(x =interval , y=mean, color=day)) +
+       geom_line() +
+       labs(title = "5 minutes interval vs average steps taken", x = "Interval", y = "Steps") +
+       facet_wrap(~day, ncol = 1, nrow=2)
+p
+
+```
